@@ -68,6 +68,9 @@ body:not(.ads-on) .adslot{display:none!important}
 .stars{display:flex;gap:6px;justify-content:center}
 .stars i{width:54px;height:54px;display:block;background:no-repeat center/contain;filter:drop-shadow(0 3px 0 rgba(0,0,0,.2))}
 @media (orientation:landscape) and (max-height:500px){.wrap{max-width:640px;gap:8px}.btn.big{min-height:56px;font-size:26px}.topbar h2{font-size:24px}}
+/* Game surface: block long-press callout / text selection / browser gestures */
+html,body,canvas#cv,#hud{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas#cv,img{-webkit-user-drag:none}
 :root{--bg:#1b2a4a;--ink:#fff}
 body{background:#1b2a4a}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:0 18px;border-radius:16px;font-size:18px;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.25);border:2px solid rgba(255,255,255,.3);box-shadow:0 5px 0 rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.35);transition:transform .1s;position:relative;white-space:nowrap}
@@ -99,7 +102,7 @@ h2{font-size:30px}
 #lvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;width:100%}
 .lv{aspect-ratio:1;border-radius:18px;background:linear-gradient(180deg,#5a6fb0,#34407a);border:2px solid rgba(255,255,255,.25);box-shadow:0 5px 0 rgba(0,0,0,.35);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:24px;color:#fff;gap:2px}
 .lv small{font-size:12px;letter-spacing:1px;color:#ffd84f}.lv small i{font-style:normal;opacity:.3}.lv small i.on{opacity:1}
-.lv.boss{grid-column:span 2;aspect-ratio:auto;background:linear-gradient(180deg,#ff6a5a,#b0283a)}.lv.lock{filter:grayscale(1) brightness(.55)}.lv.cur{outline:3px solid #ffd84f;animation:pul2 1.2s infinite}
+.lv.boss{background:linear-gradient(180deg,#ff6a5a,#b0283a);box-shadow:0 5px 0 rgba(120,20,30,.55),0 0 0 2px rgba(255,216,79,.35)}.lv.lock{filter:grayscale(1) brightness(.55)}.lv.cur{outline:3px solid #ffd84f;animation:pul2 1.2s infinite}
 @keyframes pul2{50%{outline-color:#fff}}
 .loadout{display:flex;align-items:center;gap:12px;width:100%;background:rgba(10,15,40,.55);border-radius:18px;padding:8px 12px;border:2px solid rgba(255,255,255,.15)}
 .loadout div{flex:1;display:flex;flex-direction:column}.loadout small{opacity:.7;font-size:12px}#loC{width:72px;height:48px}
@@ -147,7 +150,7 @@ h2{font-size:30px}
 #toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 30px);transform:translateX(-50%);z-index:60;background:rgba(10,15,40,.9);border:2px solid #ffd84f;border-radius:16px;padding:10px 18px;font-size:16px;pointer-events:none}
 @media (orientation:landscape) and (max-height:500px){
  .title{flex-direction:column;margin:auto 0 2vh;gap:8px}.logo{font-size:52px}.btn.big{min-height:50px;font-size:22px}.tag{font-size:15px}
- #lvGrid{grid-template-columns:repeat(8,1fr)}.lv{font-size:18px;border-radius:14px}.lv.boss{grid-column:span 1;aspect-ratio:1}.lv small{font-size:10px}
+ #lvGrid{grid-template-columns:repeat(8,1fr)}.lv{font-size:18px;border-radius:14px}.lv small{font-size:10px}
  .wrap.panel{padding:12px;gap:8px}#rStars{font-size:40px}.res .earn{font-size:24px}#rStats b{font-size:16px}
  #stHead{padding:8px 14px}#hBars{width:150px}#bEmp{width:62px;height:62px}#bEmp svg{width:62px;height:62px}.ups{grid-template-columns:repeat(4,1fr)}
 }
@@ -770,17 +773,46 @@ function layout() {
   try {
     var w = Math.max(200, window.innerWidth || 360), h = Math.max(200, window.innerHeight || 640);
     var qd = [1, 1.5, 2][Q.lvl]; DPR = Math.min(window.devicePixelRatio || 1, qd);
+    var oW = W, oH = H;
     W = w; H = h; cvs.width = Math.round(w * DPR); cvs.height = Math.round(h * DPR);
     var land = isLand();
     LY.hz = H * (land ? 0.4 : 0.33);
-    LY.E = Math.min(H * (land ? 0.72 : 0.56), W * 1.05);
+    // Portrait: keep world scale from blowing past the side covers at 360–412 widths.
+    LY.E = Math.min(H * (land ? 0.72 : 0.56), W * (land ? 1.05 : 0.88));
     LY.U = LY.E * 2.3;
     LY.half = (W / 2) / (LY.U * sZ(0.5));
-    LY.maxCam = Math.max(0, 1.12 - LY.half);
+    // maxCam must clear near-z cover half-width (~z 0.28), not only mid-field z=0.5.
+    var coverPad = 0.22, xEdge = 1.05 + coverPad;
+    var visNear = (W * 0.5 - 10) / (LY.U * sZ(0.28));
+    LY.maxCam = Math.max(0, xEdge - visNear, 1.12 - LY.half);
+    if (LY.maxCam > 0.9) {
+      var maxU = (W * 0.5 - 10) / Math.max(0.12, (xEdge - 0.9) * sZ(0.28));
+      if (LY.U > maxU) { LY.U = maxU; LY.E = LY.U / 2.3; LY.half = (W / 2) / (LY.U * sZ(0.5)); visNear = (W * 0.5 - 10) / (LY.U * sZ(0.28)); LY.maxCam = Math.max(0, xEdge - visNear); }
+    }
     LY.gs = Math.min(W, H) * (land ? 0.5 : 0.48);
     ART.setRes(LY.E * sZ(0.3) * DPR * 0.9);
     BG = {}; // rebuilt lazily
+    if (G && G.aim && oW > 0 && (oW !== W || oH !== H)) remapAimAfterResize();
   } catch (e) {}
+}
+function remapAimAfterResize() {
+  try {
+    G.aim.x = clamp(G.aim.x, -1.25, 1.25);
+    G.aim.y = clamp(G.aim.y, 0.08, 0.86);
+    G.cam = clamp(G.cam, -LY.maxCam, LY.maxCam);
+    var A = aimScreen();
+    if (A.x < 48 || A.y < 90 || A.x > W - 24 || A.y > H - 24) recenterAim();
+  } catch (e) {}
+}
+function recenterAim() {
+  try {
+    var best = null, bd = 1e9;
+    function cand(x, y) { var d = Math.hypot(x - W / 2, y - H * 0.45); if (d < bd) { bd = d; best = { x: x, y: y }; } }
+    if (G.ents) G.ents.forEach(function (en) { if (en.dead) return; var r = enemyRect(en); cand(r.cx, r.y + r.h * 0.3); });
+    if (G.boss && G.boss.hp > 0) G.boss.cores.forEach(function (c, i) { if (c.alive) { var cp = corePos(G.boss, c, i); cand(cp.x, cp.y); } });
+    if (!best && G.covers) G.covers.forEach(function (c) { if (c.hp <= 0) return; var r = coverRect(c); cand(r.x + r.w / 2, r.y + r.h * 0.4); });
+    if (best) setAimScreen(best.x, best.y); else { G.aim.x = 0; G.aim.y = 0.55; }
+  } catch (e) { G.aim.x = 0; G.aim.y = 0.55; }
 }
 function buildBG() {
   try {
@@ -845,21 +877,40 @@ function spawnBoss() {
 }
 
 /* ---------- input ---------- */
-var IN = { down: 0, id: null, lx: 0, ly: 0, mouse: 0, key: 0, lastMove: 0 };
+var IN = { down: 0, id: null, lx: 0, ly: 0, mouse: 0, key: 0, lastMove: 0, ignoreMouseUntil: 0 };
 function uiTarget(e) { var t = e.target; return t && t !== cvs && t.closest && t.closest('button,.screen,#hud .btn,.hbtn'); }
+/* Block long-press callouts / drag ghosts so hold-to-fire works on touch. */
+document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('dragstart', function (e) { e.preventDefault(); });
+try { cvs.draggable = false; document.querySelectorAll('img,canvas').forEach(function (el) { el.draggable = false; }); } catch (x) {}
+cvs.addEventListener('touchstart', function (e) { if (G.mode === 'play') e.preventDefault(); }, { passive: false });
 cvs.addEventListener('pointerdown', function (e) {
   try { AU.init(); if (G.mode !== 'play') return; if (IN.down && IN.id !== e.pointerId) return; IN.down = 1; IN.id = e.pointerId; IN.lx = e.clientX; IN.ly = e.clientY; IN.mouse = e.pointerType === 'mouse';
-    if (IN.mouse) setAimScreen(e.clientX, e.clientY); e.preventDefault(); try { cvs.setPointerCapture(e.pointerId); } catch (x) {} } catch (x) {}
+    if (IN.mouse && !(e.clientX === 0 && e.clientY === 0)) setAimScreen(e.clientX, e.clientY); e.preventDefault(); try { cvs.setPointerCapture(e.pointerId); } catch (x) {} } catch (x) {}
 }, { passive: false });
 window.addEventListener('pointermove', function (e) {
   try { if (G.mode !== 'play') return;
-    if (e.pointerType === 'mouse') { setAimScreen(e.clientX, e.clientY); IN.mouse = 1; IN.lastMove = G.t; return; }
+    if (e.pointerType === 'mouse') {
+      if (performance.now() < IN.ignoreMouseUntil) return;
+      if (e.clientX === 0 && e.clientY === 0) return;
+      setAimScreen(e.clientX, e.clientY); IN.mouse = 1; IN.lastMove = G.t; return;
+    }
     if (!IN.down || e.pointerId !== IN.id) return; var dx = e.clientX - IN.lx, dy = e.clientY - IN.ly; IN.lx = e.clientX; IN.ly = e.clientY;
     var k = 1.35 * SAVE.set.sens; G.aim.x = clamp(G.aim.x + dx * k / (LY.U * sZ(0.5)), -1.25, 1.25); G.aim.y = clamp(G.aim.y + dy * k / H, 0.08, 0.86); if (Math.abs(dx) + Math.abs(dy) > 1.5) IN.lastMove = G.t; } catch (x) {}
 });
 function up(e) { if (e.pointerId === IN.id) { IN.down = 0; IN.id = null; } }
 window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
-window.addEventListener('keydown', function (e) { if (e.code === 'Space') { IN.key = 1; e.preventDefault(); } if (e.code === 'KeyE' && G.mode === 'play') useEmp(); if (e.code === 'Escape' && G.mode === 'play') UI.pause(); });
+window.addEventListener('keydown', function (e) {
+  if (e.code === 'Space') { IN.key = 1; e.preventDefault(); }
+  if (e.code === 'KeyE' && G.mode === 'play') useEmp();
+  if (e.code === 'Escape') {
+    if (G.mode === 'play') { UI.pause(); e.preventDefault(); }
+    else {
+      var map = document.getElementById('scrMap');
+      if (map && !map.classList.contains('hidden')) { UI.title(); e.preventDefault(); }
+    }
+  }
+});
 window.addEventListener('keyup', function (e) { if (e.code === 'Space') IN.key = 0; });
 window.addEventListener('blur', function () { IN.down = 0; IN.key = 0; });
 function setAimScreen(sx, sy) { G.aim.x = clamp((sx - W / 2) / (LY.U * sZ(0.5)) + G.cam, -1.25, 1.25); G.aim.y = clamp((sy - camOff()) / H, 0.05, 0.9); }
@@ -1451,7 +1502,8 @@ var UI = (function () {
 /* ---- boot & loop ---- */
 (function () {
   var last = 0, rz = 0;
-  function onResize() { clearTimeout(rz); rz = setTimeout(function () { try { layout(); } catch (e) {} }, 60); }
+  function onResize() { clearTimeout(rz); try { IN.ignoreMouseUntil = performance.now() + 500; } catch (e) {}
+    rz = setTimeout(function () { try { IN.ignoreMouseUntil = performance.now() + 300; layout(); } catch (e) {} }, 60); }
   window.addEventListener('resize', onResize); window.addEventListener('orientationchange', onResize);
   document.addEventListener('visibilitychange', function () { if (document.hidden) { AU.suspend(); if (G.mode === 'play') UI.pause(); } else AU.resume(); });
   function frame(ts) {
