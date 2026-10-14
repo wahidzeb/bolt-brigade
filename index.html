@@ -155,6 +155,17 @@ h2{font-size:30px}
  #stHead{padding:8px 14px}#hBars{width:150px}#bEmp{width:62px;height:62px}#bEmp svg{width:62px;height:62px}.ups{grid-template-columns:repeat(4,1fr)}
 }
 
+/* COVER button (touch mode) */
+#bCover{display:none;position:absolute;right:calc(env(safe-area-inset-right,0px) + 14px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:92px;height:92px;border-radius:50%;flex-direction:column;align-items:center;justify-content:center;gap:0;background:radial-gradient(circle at 35% 30%,rgba(120,170,255,.85),rgba(30,60,140,.85));border:3px solid rgba(255,255,255,.75);box-shadow:0 5px 0 rgba(0,0,0,.35);color:#fff;touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+#bCover span{font-size:34px;line-height:1}#bCover small{font-size:13px;font-weight:900;letter-spacing:.5px}
+#bCover.on{background:radial-gradient(circle at 35% 30%,#ffe98a,#e0a020);transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.35)}
+#bCover.warn:not(.on){animation:pul 0.6s infinite;border-color:#ff5a4a}
+body.touchmode #bCover{display:flex}
+@media (orientation:landscape) and (max-height:500px){#bCover{width:80px;height:80px}#bCover span{font-size:28px}}
+body.touchmode #hTip{top:24%}
+/* Missions in short landscape: keep the back button clear of the MORE GAMES pill (top-left, ~162px wide) */
+@media (orientation:landscape) and (max-height:500px){#scrMap .hdr{padding-left:max(0px,calc(176px + env(safe-area-inset-left,0px) - (100vw - min(560px,100vw - 32px)) / 2))}}
+
 </style>
 </head>
 <body>
@@ -168,6 +179,7 @@ h2{font-size:30px}
  <div id="hBars"><div class="bar hp"><i id="hHp"></i><span>❤</span></div><div class="bar cvb"><i id="hCv"></i><span>🛡</span></div></div>
  <div id="hBoss" class="hidden"><b id="hBossN"></b><div class="bbar"><i id="hBossHp"></i></div></div>
  <button class="hbtn" id="bEmp" aria-label="EMP burst"><svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="26" class="ring"/><circle cx="30" cy="30" r="26" class="fill" id="empRing"/></svg><span>⚡</span><small>EMP</small></button>
+ <button class="hbtn" id="bCover" aria-label="Hold to take cover"><span>🛡</span><small>COVER</small></button>
  <div id="hAmmo"><b id="hAmmoN">12</b><small id="hAmmoW">PEA</small></div>
  <div id="hTip" class="hidden"></div>
 </div>
@@ -214,7 +226,8 @@ h2{font-size:30px}
  <div class="wrap panel">
   <div class="hdr"><button class="btn w ib" data-back="scrTitle" aria-label="Back">‹</button><h2>How to play</h2><span></span></div>
   <div class="how">
-   <p><b>👆 Hold</b> anywhere to pop out of cover. Your blaster <b>fires by itself</b>.</p>
+   <p><b>📱 Phone:</b> touch to aim, your blaster <b>fires by itself</b>. <b>Hold 🛡 COVER</b> to duck and reload.</p>
+   <p><b>🖱 Computer:</b> <b>hold</b> the mouse or Space to pop out of cover. Hold <b>C</b> or <b>Shift</b> to stay in cover.</p>
    <p><b>↔ Drag</b> while holding to aim. Aim assist snaps to bots for you.</p>
    <p><b>✋ Let go</b> to duck and <b>reload</b>. Duck when a bot shows a red <b style="color:#ff5a4a">!</b></p>
    <p><b>💥 Shoot</b> grenades and rockets out of the air, smash crates and blow up ⚡ barrels.</p>
@@ -780,6 +793,11 @@ function layout() {
     // Portrait: keep world scale from blowing past the side covers at 360–412 widths.
     LY.E = Math.min(H * (land ? 0.72 : 0.56), W * (land ? 1.05 : 0.88));
     LY.U = LY.E * 2.3;
+    // Portrait: fit every cover (and the bot hiding behind it) to the screen width at cam 0.
+    if (!land && G && G.def && G.def.slots && G.def.slots.length) {
+      var ext = 0; G.def.slots.forEach(function (sl) { ext = Math.max(ext, (Math.abs(sl.x) + (sl.type === 'barrel' ? 0.12 : 0.24)) * sZ(sl.z)); });
+      var uFit = (W / 2 - 6) / Math.max(0.05, ext); if (LY.U > uFit) { LY.U = uFit; LY.E = LY.U / 2.3; }
+    }
     LY.half = (W / 2) / (LY.U * sZ(0.5));
     // maxCam must clear near-z cover half-width (~z 0.28), not only mid-field z=0.5.
     var coverPad = 0.22, xEdge = 1.05 + coverPad;
@@ -843,6 +861,7 @@ function startLevel(L, demo) {
     G.p = newPlayer(); G.aim = { x: 0, y: 0.55 }; G.cam = 0; G.t = 0; G.wave = -1; G.queue = []; G.waveT = 1.0; G.kills = 0; G.earn = 0; G.shots = 0; G.hits = 0; G.shake = 0; G.flash = 0; G.slow = 0; G.boss = null; G.hurt = 0; G.ended = 0; G.hideDy = 0; G.banner = null; G.time = 0; G.stun = 0; G.lastHit = 0;
     var stl = STAGES[d.st].cover;
     d.slots.forEach(function (s, i) { G.covers.push({ x: s.x, z: s.z, type: s.type, style: stl, hp: s.type === 'barrel' ? 20 : 70 * (1 + d.st * 0.25), mhp: s.type === 'barrel' ? 20 : 70 * (1 + d.st * 0.25), seed: i, occ: null, wob: 0 }); });
+    if (!isLand() && LY.fitL !== L) { LY.fitL = L; layout(); }
     if (BG.key !== STAGES[d.st].id + W + 'x' + H) buildBG();
     if (demo) { for (var i = 0; i < 4; i++) spawn(['clank', 'shieldy', 'lobber', 'zipper', 'brute'][(i + L) % 5], true); }
     else { zt('level_start', { level: L + 1 }); ztPlay(true); }
@@ -877,7 +896,10 @@ function spawnBoss() {
 }
 
 /* ---------- input ---------- */
-var IN = { down: 0, id: null, lx: 0, ly: 0, mouse: 0, key: 0, lastMove: 0, ignoreMouseUntil: 0 };
+var IN = { down: 0, id: null, lx: 0, ly: 0, mouse: 0, key: 0, lastMove: 0, ignoreMouseUntil: 0, touch: 0, cover: 0, coverId: null, coverKey: 0, armed: 0 };
+/* Touch mode: you stay popped out and auto-fire; your finger is the reticle; hold the COVER button to duck & reload. */
+function setTouchMode(on) { if (IN.touch === on) return; IN.touch = on; try { document.body.classList.toggle('touchmode', !!on); } catch (x) {} }
+try { if (window.matchMedia && matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) setTouchMode(1); } catch (x) {}
 function uiTarget(e) { var t = e.target; return t && t !== cvs && t.closest && t.closest('button,.screen,#hud .btn,.hbtn'); }
 /* Block long-press callouts / drag ghosts so hold-to-fire works on touch. */
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -886,6 +908,7 @@ try { cvs.draggable = false; document.querySelectorAll('img,canvas').forEach(fun
 cvs.addEventListener('touchstart', function (e) { if (G.mode === 'play') e.preventDefault(); }, { passive: false });
 cvs.addEventListener('pointerdown', function (e) {
   try { AU.init(); if (G.mode !== 'play') return; if (IN.down && IN.id !== e.pointerId) return; IN.down = 1; IN.id = e.pointerId; IN.lx = e.clientX; IN.ly = e.clientY; IN.mouse = e.pointerType === 'mouse';
+    if (!IN.mouse) { setTouchMode(1); IN.armed = 1; setAimScreen(e.clientX, e.clientY); IN.lastMove = G.t; }
     if (IN.mouse && !(e.clientX === 0 && e.clientY === 0)) setAimScreen(e.clientX, e.clientY); e.preventDefault(); try { cvs.setPointerCapture(e.pointerId); } catch (x) {} } catch (x) {}
 }, { passive: false });
 window.addEventListener('pointermove', function (e) {
@@ -896,12 +919,14 @@ window.addEventListener('pointermove', function (e) {
       setAimScreen(e.clientX, e.clientY); IN.mouse = 1; IN.lastMove = G.t; return;
     }
     if (!IN.down || e.pointerId !== IN.id) return; var dx = e.clientX - IN.lx, dy = e.clientY - IN.ly; IN.lx = e.clientX; IN.ly = e.clientY;
+    if (IN.touch) { setAimScreen(e.clientX, e.clientY); if (Math.abs(dx) + Math.abs(dy) > 1.5) IN.lastMove = G.t; return; }
     var k = 1.35 * SAVE.set.sens; G.aim.x = clamp(G.aim.x + dx * k / (LY.U * sZ(0.5)), -1.25, 1.25); G.aim.y = clamp(G.aim.y + dy * k / H, 0.08, 0.86); if (Math.abs(dx) + Math.abs(dy) > 1.5) IN.lastMove = G.t; } catch (x) {}
 });
-function up(e) { if (e.pointerId === IN.id) { IN.down = 0; IN.id = null; } }
+function up(e) { if (e.pointerId === IN.id) { IN.down = 0; IN.id = null; } if (e.pointerId === IN.coverId) { IN.cover = 0; IN.coverId = null; } }
 window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
 window.addEventListener('keydown', function (e) {
   if (e.code === 'Space') { IN.key = 1; e.preventDefault(); }
+  if (e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ArrowDown' || e.code === 'KeyS') { IN.coverKey = 1; if (G.mode === 'play') e.preventDefault(); }
   if (e.code === 'KeyE' && G.mode === 'play') useEmp();
   if (e.code === 'Escape') {
     if (G.mode === 'play') { UI.pause(); e.preventDefault(); }
@@ -911,8 +936,8 @@ window.addEventListener('keydown', function (e) {
     }
   }
 });
-window.addEventListener('keyup', function (e) { if (e.code === 'Space') IN.key = 0; });
-window.addEventListener('blur', function () { IN.down = 0; IN.key = 0; });
+window.addEventListener('keyup', function (e) { if (e.code === 'Space') IN.key = 0; if (e.code === 'KeyC' || e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'ArrowDown' || e.code === 'KeyS') IN.coverKey = 0; });
+window.addEventListener('blur', function () { IN.down = 0; IN.key = 0; IN.cover = 0; IN.coverId = null; IN.coverKey = 0; });
 function setAimScreen(sx, sy) { G.aim.x = clamp((sx - W / 2) / (LY.U * sZ(0.5)) + G.cam, -1.25, 1.25); G.aim.y = clamp((sy - camOff()) / H, 0.05, 0.9); }
 function aimScreen() { return { x: gx(G.aim.x, 0.5), y: G.aim.y * H + camOff() }; }
 
@@ -1068,14 +1093,19 @@ function update(dt) {
   G.time += dt;
   var playing = G.mode === 'play' && !G.ended;
   // player pop / fire / reload
-  var hold = playing && (IN.down || IN.key);
+  var ducking = IN.cover || IN.coverKey;
+  if (IN.touch && playing) {
+    if (IN.down) setAimScreen(IN.lx, IN.ly); // reticle stays under the finger (also right after a rotate)
+    if (p.ammo <= 0) p.autoRel = 1; else if (p.ammo >= p.ws.mag) p.autoRel = 0; // empty mag: duck by itself to reload
+  } else p.autoRel = 0;
+  var hold = playing && !ducking && !p.autoRel && (IN.touch ? IN.armed : (IN.down || IN.key));
   p.pop = G.demo ? 1 : clamp(p.pop + (hold ? 9 : -9) * dt, 0, 1);
   if (hold && !p.wasOut) AU.play('pop'); if (!hold && p.wasOut) AU.play('hide'); p.wasOut = hold;
   G.hideDy = (1 - p.pop) * H * 0.025;
   p.fireT -= dt; p.recoil = Math.max(0, p.recoil - dt * 9); p.hit = Math.max(0, p.hit - dt);
   if (playing) {
     if (p.pop > 0.85) {
-      assist(dt);
+      if (IN.touch && IN.down) assist(dt, Math.min(W, H) * 0.09, 18); else assist(dt);
       if (p.ammo > 0 && p.fireT <= 0) fire(); else if (p.ammo <= 0) { if (!p.empty) AU.play('empty'); p.empty = 1; }
       p.relT = 0;
     } else if (p.pop < 0.3 && p.cv > 0 && p.cv < p.mcv) p.cv = Math.min(p.mcv, p.cv + dt * (G.boss ? 0.5 : 0.3));
@@ -1084,7 +1114,8 @@ function update(dt) {
     }
   }
   // camera
-  var tc = clamp(G.aim.x * 0.9, -LY.maxCam, LY.maxCam); if (G.demo) tc = Math.sin(G.t * 0.15) * LY.maxCam * 0.8;
+  var tc = clamp(G.aim.x * 0.9, -LY.maxCam, LY.maxCam);
+  if (IN.touch && IN.down && G.mode === 'play') tc = clamp((IN.lx - W / 2) / (W * 0.4), -1, 1) * LY.maxCam; // finger near an edge pans if (G.demo) tc = Math.sin(G.t * 0.15) * LY.maxCam * 0.8;
   G.cam = lerp(G.cam, tc, 1 - Math.exp(-dt * 5));
   G.shake = Math.max(0, G.shake - dt * 30); G.flash = Math.max(0, G.flash - dt * 1.5); G.hurt = Math.max(0, G.hurt - dt * 1.6); G.stun = Math.max(0, G.stun - dt);
   if (G.banner) { G.banner.t -= dt; if (G.banner.t <= 0) G.banner = null; }
@@ -1136,15 +1167,15 @@ function update(dt) {
   for (var n = TRC.length - 1; n >= 0; n--) { TRC[n].t -= dt; if (TRC[n].t <= 0) TRC.splice(n, 1); }
 }
 function aliveCount() { var c = 0; for (var i = 0; i < G.ents.length; i++) if (!G.ents[i].dead) c++; return c; }
-function assist(dt) {
-  var lvl = SAVE.set.aim; if (!lvl) return; var A = aimScreen(), best = null, bd = 1e9, rad = lvl === 2 ? 1e5 : Math.min(W, H) * 0.12;
+function assist(dt, radO, strO) {
+  var lvl = SAVE.set.aim; if (!lvl) return; var A = aimScreen(), best = null, bd = 1e9, rad = radO || (lvl === 2 ? 1e5 : Math.min(W, H) * 0.12);
   var recent = G.t - IN.lastMove < 0.25 && !IN.mouse;
   function cand(x, y, pri) { var d = Math.hypot(x - A.x, y - A.y) - pri; if (d < bd && d < rad) { bd = d; best = { x: x, y: y }; } }
   PROJ.forEach(function (pr) { if (pr.shoot && !pr.dead) { var pp = projPos(pr); cand(pp.x, pp.y, 60); } });
   G.ents.forEach(function (en) { if (en.dead || en.st === 'enter') return; var r = enemyRect(en); var vis = r.y + r.h * 0.2; var exposed = !(en.slot && en.duck > 0.7); if (!exposed) return; var tx = r.cx, ty = r.y + r.h * (en.sh > 0 ? 0.13 : 0.3); if (ty > r.gy - 4) return; if (blocked(tx, ty, en.z)) { ty = r.y + r.h * 0.12; if (blocked(tx, ty, en.z)) return; } cand(tx, ty, en.st === 'aim' ? 30 : 0); });
   if (G.boss && G.boss.hp > 0) G.boss.cores.forEach(function (c, i) { if (c.alive) { var cp = corePos(G.boss, c, i); cand(cp.x, cp.y, G.boss.open > 0.5 ? 20 : -10); } });
   if (!best) { if (lvl === 2) { G.covers.forEach(function (c) { if (c.type === 'barrel' && c.hp > 0) { var r = coverRect(c); cand(r.x + r.w / 2, r.y + r.h / 2, -20); } }); } if (!best) return; }
-  var far = bd > Math.min(W, H) * 0.42, str = (lvl === 2 ? (far ? 4 : 9) : 3.5) * (recent ? 0.25 : 1), f = 1 - Math.exp(-dt * str);
+  var far = bd > Math.min(W, H) * 0.42, str = strO || (lvl === 2 ? (far ? 4 : 9) : 3.5) * (recent ? 0.25 : 1), f = 1 - Math.exp(-dt * str);
   var nx = lerp(A.x, best.x, f), ny = lerp(A.y, best.y, f);
   G.aim.x = clamp((nx - W / 2) / (LY.U * sZ(0.5)) + G.cam, -1.25, 1.25); G.aim.y = clamp((ny - camOff()) / H, 0.05, 0.9);
 }
@@ -1398,9 +1429,9 @@ var UI = (function () {
     show('scrMap');
   }
   /* ---- play ---- */
-  function play(L) { AU.init(); startLevel(L, false); G.mode = 'play'; IN.down = 0; show(null); $('hBoss').classList.add('hidden'); tipStep = SAVE.tut ? 99 : 0; hudCache = {}; AU.musOn(true); }
+  function play(L) { AU.init(); startLevel(L, false); G.mode = 'play'; IN.down = 0; IN.armed = 0; IN.cover = 0; IN.coverId = null; show(null); $('hBoss').classList.add('hidden'); tipStep = SAVE.tut ? 99 : 0; hudCache = {}; AU.musOn(true); }
   function pause() { if (G.mode !== 'play' || G.ended) return; G.mode = 'paused'; ztPlay(false); syncTog(); show('scrPause'); }
-  function resume() { if (G.mode !== 'paused') return; G.mode = 'play'; IN.down = 0; ztPlay(true); show(null); }
+  function resume() { if (G.mode !== 'paused') return; G.mode = 'play'; IN.down = 0; IN.cover = 0; IN.coverId = null; ztPlay(true); show(null); }
   function syncTog() { $('pSfx').textContent = 'Sound: ' + (SAVE.set.sfx ? 'On' : 'Off'); $('pMus').textContent = 'Music: ' + (SAVE.set.music ? 'On' : 'Off'); }
   /* ---- results ---- */
   function results(r) {
@@ -1469,15 +1500,21 @@ var UI = (function () {
     set('hCoins', 'text', fmt(SAVE.coins + G.earn));
     set('hHp', 'w', Math.round(100 * p.hp / p.mhp) + '%'); set('hCv', 'w', Math.round(100 * p.cv / p.mcv) + '%');
     set('hBars', 'cls', p.hp / p.mhp < 0.35 ? 'low' : ''); document.querySelector('.bar.hp').classList.toggle('low', p.hp / p.mhp < 0.35);
-    set('hAmmoN', 'text', p.ammo > 0 ? p.ammo + '' : 'HIDE'); set('hAmmoW', 'text', p.ws.w.name.toUpperCase()); set('hAmmo', 'cls', p.ammo <= p.ws.mag * 0.25 ? 'low' : '');
+    set('hAmmoN', 'text', p.ammo > 0 ? p.ammo + '' : IN.touch ? 'RELOAD' : 'HIDE'); set('bCover', 'cls', 'hbtn' + (IN.cover || p.autoRel ? ' on' : '') + (G.ents && G.ents.some(function (en) { return en.st === 'aim' && !en.dead; }) ? ' warn' : '')); set('hAmmoW', 'text', p.ws.w.name.toUpperCase()); set('hAmmo', 'cls', p.ammo <= p.ws.mag * 0.25 ? 'low' : '');
     var er = $('empRing'); var off = Math.round(163.4 * (1 - p.emp)); if (hudCache.emp !== off) { hudCache.emp = off; er.style.strokeDashoffset = off; } set('bEmp', 'cls', 'hbtn' + (p.emp >= 1 ? ' ready' : ''));
     if (G.boss) { set('hBoss', 'hid', false); set('hBossN', 'text', G.boss.def.name); set('hBossHp', 'w', Math.max(0, Math.round(100 * G.boss.hp / G.boss.mhp)) + '%'); } else set('hBoss', 'hid', true);
     // tutorial tips
     if (tipStep < 99 && G.L === 0) { var tip = '';
+      if (IN.touch) {
+        if (tipStep === 0) { tip = '👆 Touch a bot to aim. You fire by yourself!'; if (p.pop > 0.9 && G.shots > 3) tipStep = 1; }
+        else if (tipStep === 1) { tip = '↔ Slide your finger to move the aim'; if (G.kills > 0 || G.t > 14) tipStep = 2; }
+        else if (tipStep === 2) { tip = '🛡 Hold COVER to duck & reload. Duck when bots show a red !'; if (IN.cover && p.pop < 0.2) { tipStep = 3; SAVE.tut = 1; store(); } else if (G.t > 40) tipStep = 3; }
+      } else {
       if (tipStep === 0) { tip = '👆 Hold anywhere to pop out — you fire automatically!'; if (p.pop > 0.9 && G.shots > 3) tipStep = 1; }
       else if (tipStep === 1) { tip = '↔ Drag while holding to aim'; if (G.kills > 0 || G.t > 14) tipStep = 2; }
       else if (tipStep === 2) { tip = '✋ Let go to duck & reload. Duck when bots show a red !'; if (p.pop < 0.2 && p.relT > 0.3) { tipStep = 3; SAVE.tut = 1; store(); } }
-      else tipStep = 99;
+      }
+      if (tipStep > 2) tipStep = 99;
       set('hTip', 'text', tip); set('hTip', 'hid', !tip || G.banner != null); } else set('hTip', 'hid', true);
   }
   function applyQ() { var q = SAVE.set.q; if (q === 2) Q.lvl = 2; else if (q === 1) Q.lvl = 0; else Q.lvl = Q.auto != null ? Q.auto : 2; Q.parts = [140, 280, 520][Q.lvl]; Q.fx = Q.lvl > 0 ? 1 : 0; layout(); }
@@ -1493,6 +1530,17 @@ var UI = (function () {
   on('pSfx', function () { SAVE.set.sfx ^= 1; store(); AU.apply(); syncTog(); }); on('pMus', function () { SAVE.set.music ^= 1; store(); AU.apply(); syncTog(); });
   on('bEmp', function () { useEmp(); });
   $('bEmp').addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+  // COVER: hold to duck & reload (touch mode)
+  $('bCover').addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); AU.init(); IN.cover = 1; IN.coverId = e.pointerId; IN.armed = 1; try { $('bCover').setPointerCapture(e.pointerId); } catch (x) {} });
+  $('bCover').addEventListener('touchstart', function (e) { e.preventDefault(); }, { passive: false });
+  $('bCover').addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  // One tap is enough on menu buttons: fire on pointerup if the native click got lost (finger slid, layout/font shift right after load)
+  var tapB = null, tapT = 0;
+  document.addEventListener('pointerdown', function (e) { var b = e.target.closest && e.target.closest('.screen button'); tapB = b && e.pointerType !== 'mouse' ? { b: b, x: e.clientX, y: e.clientY, id: e.pointerId, t: performance.now() } : null; }, true);
+  document.addEventListener('pointerup', function (e) { var t = tapB; tapB = null; if (!t || t.id !== e.pointerId || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 26) return;
+    var r = t.b.getBoundingClientRect(); if (e.clientX < r.left - 10 || e.clientX > r.right + 10 || e.clientY < r.top - 10 || e.clientY > r.bottom + 10) return;
+    setTimeout(function () { if (tapT && performance.now() - tapT < 650) return; if (!document.body.contains(t.b) || t.b.closest('.hidden')) return; tapT = performance.now(); t.b.click(); }, 80); }, true);
+  document.addEventListener('click', function (e) { if (!e.isTrusted) { tapT = performance.now(); return; } var b = e.target.closest && e.target.closest('.screen button'); if (!b) return; if (tapT && performance.now() - tapT < 650) { e.stopImmediatePropagation(); e.preventDefault(); return; } tapT = performance.now(); }, true);
   on('rNext', function () { var a = $('rNext').dataset.act; if (a === 'next') play(Math.min(NLEV - 1, lastRes.L + 1)); else if (a === 'retry') play(lastRes.L); else map(); });
   on('rRetry', function () { play(lastRes.L); }); on('rMap', function () { map(Math.floor(lastRes.L / 7)); }); on('rArm', function () { armory('scrResults'); });
   on('bReset', function () { if (!confirm('Reset all progress?')) return; SAVE = defSave(); store(); AU.apply(); toast('Progress reset'); settings(); });
