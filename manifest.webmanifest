@@ -1,0 +1,42 @@
+{
+  "id": "/bolt-brigade/",
+  "name": "Bolt Brigade",
+  "short_name": "Bolt Brigade",
+  "description": "Bolt Brigade by Zaib: a family-friendly cover shooter. Hold to pop out and auto-fire at wind-up toy robots, let go to duck and reload. 35 missions, 5 bosses, blaster upgrades. Free in your browser.",
+  "lang": "en",
+  "start_url": "/bolt-brigade/?source=pwa",
+  "scope": "/bolt-brigade/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1b2a4a",
+  "background_color": "#1b2a4a",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "/bolt-brigade/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/bolt-brigade/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/bolt-brigade/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/bolt-brigade/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
